@@ -3,6 +3,30 @@ import { SITE } from "./config";
 
 type ShareInput = { title: string; lines: string[]; artSvg: SVGSVGElement | null; footer: string };
 
+/** Wrap against measured canvas width, keeping English words intact when possible. */
+function wrapText(g: CanvasRenderingContext2D, text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const part of text.match(/\S+\s*|\s+/gu) ?? []) {
+    if (g.measureText(line + part).width <= width) {
+      line += part;
+      continue;
+    }
+    if (line.trim()) lines.push(line.trimEnd());
+    line = "";
+    // A long token or Chinese sentence still needs character-level wrapping.
+    for (const char of part) {
+      if (line && g.measureText(line + char).width > width) {
+        lines.push(line.trimEnd());
+        line = "";
+      }
+      line += char;
+    }
+  }
+  if (line.trim()) lines.push(line.trimEnd());
+  return lines;
+}
+
 async function svgToImage(svg: SVGSVGElement): Promise<HTMLImageElement> {
   const xml = new XMLSerializer().serializeToString(svg);
   const img = new Image();
@@ -33,7 +57,13 @@ export async function shareImage(input: ShareInput): Promise<Blob> {
   g.fillText(input.title, 420, 140);
   g.font = `400 28px ${font}`;
   g.fillStyle = "#d8cfbf";
-  input.lines.slice(0, 7).forEach((l, i) => g.fillText(l, 420, 200 + i * 44));
+  const lines = input.lines.flatMap((line) => wrapText(g, line, 708));
+  const lineHeight = Math.min(36, 300 / Math.max(1, lines.length - 1));
+  let y = 200;
+  for (const line of lines) {
+    g.fillText(line, 420, y);
+    y += lineHeight;
+  }
   g.fillStyle = "#f2a93b";
   g.font = `600 28px ${font}`;
   g.fillText(`${SITE.name} · ${SITE.author}`, 72, 560);

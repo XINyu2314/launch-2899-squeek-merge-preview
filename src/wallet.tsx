@@ -4,6 +4,7 @@
  * SDKs (npm): wagmi 3.7.10, viem 2.57.14, @coinbase/wallet-sdk 4.4.0. EIP-6963 discovery, no relay, no project ID.
  */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createConfig, http, useAccount, useConnect, useDisconnect, useSwitchChain, type Connector } from "wagmi";
 import { coinbaseWallet, injected } from "wagmi/connectors";
 import { sepolia } from "viem/chains";
@@ -50,18 +51,32 @@ export function ConnectControl({ t }: { t: T }) {
   const close = () => {
     setOpen(false);
     reset();
-    trigger.current?.focus();
   };
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      if (e.key !== "Tab") return;
+      const stops = sheet.current?.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]");
+      if (!stops?.length) return;
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     addEventListener("keydown", onKey);
-    sheet.current?.querySelector<HTMLElement>("button, a")?.focus();
     const root = document.getElementById("app-shell");
     root?.setAttribute("inert", "");
+    sheet.current?.querySelector<HTMLElement>("button, a")?.focus();
     return () => {
       removeEventListener("keydown", onKey);
       root?.removeAttribute("inert");
+      trigger.current?.focus();
     };
   }, [open]);
   useEffect(() => {
@@ -91,7 +106,7 @@ export function ConnectControl({ t }: { t: T }) {
       <button ref={trigger} className="btn btn-primary" onClick={() => setOpen(true)} aria-haspopup="dialog">
         {t("connect")}
       </button>
-      {open && (
+      {open && createPortal(
         <div className="sheet-bg" onClick={close}>
           <div ref={sheet} className="sheet" role="dialog" aria-modal="true" aria-labelledby="connect-title" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-head">
@@ -120,7 +135,8 @@ export function ConnectControl({ t }: { t: T }) {
               ))}
             {error && <p className="note" role="status">{t("rejected")}</p>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

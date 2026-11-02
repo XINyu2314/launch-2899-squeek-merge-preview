@@ -4,3 +4,19 @@ node_modules/
 **/.vite/
 *.tgz
 test/scratch/
+
+# Required revision deliverables only. Explicit path budget: 2,203,648 bytes total.
+# /.imd-responses.json <=16 KiB
+!/.imd-responses.json
+!/artifacts/
+/artifacts/*
+# Each required screenshot <=1 MiB
+!/artifacts/screenshot-1440.png
+!/artifacts/screenshot-390.png
+# Reviewer page <=16 KiB; validation <=32 KiB; license <=16 KiB
+!/artifacts/for-reviewers.md
+!/artifacts/validation.md
+!/artifacts/design-guidance-LICENSE.txt
+# Probe results <=8 KiB; interaction results <=16 KiB
+!/artifacts/taste-checks.json
+!/artifacts/revision-checks.json

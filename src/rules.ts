@@ -59,7 +59,7 @@ export function buildRows(survivor: Squeek, donor: Squeek, pace: Pace, rules: Ru
     { item: "r_power", d0: { k: "v_powerPair", v: { p: fmt(p), t: fmt(p * 2) } }, d7: { k: "v_powerNext", v: { p: fmt(pNext) } }, d30: { k: "v_powerNext", v: { p: fmt(pNext) } }, tag: "certain", basis: "b_power" },
     { item: "r_rewards", d0: { k: "v_split", v: { claim: claim ? 1 : 0 } }, d7: { k: "v_merged", v: { id: s } }, d30: { k: "v_merged", v: { id: s } }, tag: "certain", basis: "b_rewards" },
     { item: "r_cooldown", d0: { k: "v_cdNow" }, d7: cd === 0 ? { k: "v_cdNone" } : { k: "v_cdNew", v: { b: fmt(cd) } }, d30: cd === 0 ? { k: "v_cdNone" } : { k: "v_cdNew", v: { b: fmt(cd) } }, tag: "certain", basis: "b_cooldown" },
-    { item: "r_remerge", d0: { k: "v_remergeNow" }, d7: remergeAt(7), d30: cd === 0 ? remergeAt(0) : { k: "v_cdDays", v: { lo: dLo, hi: dHi } }, tag: "scenario", basis: "b_scenario" },
+    { item: "r_remerge", d0: { k: "v_remergeNow" }, d7: remergeAt(7), d30: remergeAt(30), tag: "scenario", basis: "b_scenario" },
     { item: "r_sell", d0: { k: "v_count", v: { n: 2 } }, d7: { k: "v_count", v: { n: 1 } }, d30: { k: "v_count", v: { n: 1 } }, tag: "certain", basis: "b_sell" },
     { item: "r_earn", d0: { k: "v_shareDep" }, d7: { k: "v_noForecast" }, d30: { k: "v_noForecast" }, tag: "unknown", basis: "b_earn" },
     { item: "r_price", d0: { k: "v_unknownPrice" }, d7: { k: "v_unknownPrice" }, d30: { k: "v_unknownPrice" }, tag: "unknown", basis: "b_price" },

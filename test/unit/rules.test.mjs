@@ -28,3 +28,19 @@ test("official checklist needs the irreversibility gate", () => {
   assert.equal(canOpenOfficial({ g_lost: true, g_noUndo: true }), false);
   assert.equal(canOpenOfficial({ g_gate: true }), true);
 });
+
+test("remerge eligibility is evaluated independently at Day 7 and Day 30", () => {
+  const remerge = (level, pace, cooldown) => buildRows(sq("1", "idle", level), sq("2", "idle", level), pace,
+    { maximumLevel: 10, basePower: [], cooldownBlocks: cooldown }).find(r => r.item === "r_remerge");
+  const steady = remerge(1, "steady", [0, 3000]);
+  assert.equal(steady.d7.k, "v_remergeYes");
+  assert.equal(steady.d30.k, "v_remergeYes");
+  const slow = remerge(2, "slow", [0, 3000, 7000]);
+  assert.equal(slow.d7.k, "v_remergeNo");
+  assert.equal(slow.d30.k, "v_remergeYes");
+  const uncertain = remerge(5, "steady", [0, 3000, 7000, 14000, 21000, 28000]);
+  assert.equal(uncertain.d30.k, "v_remergeMaybe");
+  const long = remerge(8, "steady", [0, 3000, 7000, 14000, 21000, 28000, 35000, 42000, 49000]);
+  assert.equal(long.d30.k, "v_remergeNo");
+  assert.equal(remerge(9, "steady", []).d30.k, "v_remergeMax");
+});

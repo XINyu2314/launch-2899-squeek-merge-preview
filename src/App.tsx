@@ -7,7 +7,7 @@ import { COLLECTION, COLLECTION_OWNER, type Squeek, type Status } from "./data";
 import { translate, type Key, type Lang } from "./i18n";
 import { blockReason, buildRows, canOpenOfficial, mergeCallText, PACE, REGRETS, type Cell, type CompareRow, type Pace, type RegretKey, type Tag } from "./rules";
 import { shareImage } from "./share";
-import { deleteSnapshot, downloadBlob, listSnapshots, saveSnapshot, type Snapshot, type SourceId } from "./snapshots";
+import { deleteSnapshot, downloadBlob, listSnapshots, saveSnapshot, snapshotRows, type Snapshot, type SourceId } from "./snapshots";
 import { ConnectControl, short } from "./wallet";
 
 type Mode = "collection" | "wallet";
@@ -18,6 +18,7 @@ type WalletState = {
   phase: "idle" | "loading" | "ready" | "error";
   error: string;
   source: SourceId;
+  unverifiedTokenIds: string[];
 };
 
 const noPicks: Picks = { survivor: null, donor: null };
@@ -65,9 +66,9 @@ export default function App() {
   // Collection and wallet keep fully separate state, so switching never mixes their holdings.
   const [colPicks, setColPicks] = useState<Picks>(noPicks);
   const [walPicks, setWalPicks] = useState<Picks>(noPicks);
-  const [wallet, setWallet] = useState<WalletState>({ address: "", tokens: [], phase: "idle", error: "", source: "api" });
+  const [wallet, setWallet] = useState<WalletState>({ address: "", tokens: [], phase: "idle", error: "", source: "api", unverifiedTokenIds: [] });
   const [addrInput, setAddrInput] = useState("");
-  const [addrError, setAddrError] = useState("");
+  const [addrError, setAddrError] = useState(false);
   const [rpcIds, setRpcIds] = useState("");
   const [images, setImages] = useState<Record<string, string>>({});
 
@@ -78,14 +79,19 @@ export default function App() {
   const source: SourceId = mode === "collection" ? "collection" : wallet.source;
 
   const byId = (id: string | null) => (id ? tokens.find((x) => x.tokenId === id) ?? null : null);
-  const survivor = byId(picks.survivor);
-  const donor = byId(picks.donor);
+  const pickedSurvivor = byId(picks.survivor);
+  const pickedDonor = byId(picks.donor);
+  const [viewedSnap, setViewedSnap] = useState<Snapshot | null>(null);
+  useEffect(() => setViewedSnap(null), [mode, owner]);
+  const survivor = viewedSnap?.survivor ?? pickedSurvivor;
+  const donor = viewedSnap?.donor ?? pickedDonor;
 
   const [pace, setPace] = useState<Pace>("steady");
-  const rows: CompareRow[] | null = useMemo(() => (survivor && donor ? buildRows(survivor, donor, pace, rules) : null), [survivor, donor, pace, rules]);
+  const viewPace = viewedSnap?.pace ?? pace;
+  const rows: CompareRow[] | null = useMemo(() => (viewedSnap ? snapshotRows(viewedSnap) : survivor && donor ? buildRows(survivor, donor, pace, rules) : null), [viewedSnap, survivor, donor, pace, rules]);
 
   const [ticked, setTicked] = useState<Partial<Record<RegretKey, boolean>>>({});
-  const pairKey = `${mode}:${picks.survivor}:${picks.donor}`;
+  const pairKey = `${mode}:${picks.survivor}:${picks.donor}:${viewedSnap?.id ?? "current"}`;
   useEffect(() => setTicked({}), [pairKey]);
 
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
@@ -100,13 +106,14 @@ export default function App() {
   // ---- wallet loading ----
   const { address: connected, chainId: walletChain, isConnected } = useAccount();
   const loadWallet = useCallback(async (addr: string) => {
-    setWallet((w) => ({ ...w, address: addr, phase: "loading", error: "" }));
+    setViewedSnap(null);
+    setWallet((w) => ({ ...w, address: addr, phase: "loading", error: "", unverifiedTokenIds: [] }));
     setWalPicks(noPicks);
     try {
       const r = await loadAccount(addr);
-      setWallet({ address: addr, tokens: r.tokens, phase: "ready", error: "", source: "api" });
+      setWallet({ address: addr, tokens: r.tokens, phase: "ready", error: "", source: "api", unverifiedTokenIds: [] });
     } catch (e) {
-      setWallet({ address: addr, tokens: [], phase: "error", error: String((e as Error).message || e), source: "api" });
+      setWallet({ address: addr, tokens: [], phase: "error", error: String((e as Error).message || e), source: "api", unverifiedTokenIds: [] });
     }
   }, []);
   useEffect(() => {
@@ -120,21 +127,23 @@ export default function App() {
   const onAddrSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAddress(addrInput)) {
-      setAddrError(t("addrInvalid"));
+      setAddrError(true);
       document.getElementById("addr")?.focus();
       return;
     }
-    setAddrError("");
+    setAddrError(false);
     loadWallet(addrInput.trim());
   };
   const onRpcSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const list = rpcIds.split(/[\s,]+/).filter((x) => /^\d+$/.test(x)).slice(0, 20);
     if (!list.length || !isAddress(wallet.address)) return;
+    setViewedSnap(null);
+    setWalPicks(noPicks);
     setWallet((w) => ({ ...w, phase: "loading" }));
     try {
       const found = await loadByRpc(wallet.address, list, ids);
-      setWallet((w) => ({ ...w, tokens: found, phase: "ready", error: "", source: "rpc" }));
+      setWallet((w) => ({ ...w, tokens: found.tokens, phase: "ready", error: "", source: "rpc", unverifiedTokenIds: found.unverifiedTokenIds }));
     } catch (err) {
       setWallet((w) => ({ ...w, phase: "error", error: String((err as Error).message || err) }));
     }
@@ -159,6 +168,7 @@ export default function App() {
 
   // ---- picking ----
   const pick = (s: Squeek) => {
+    setViewedSnap(null);
     setPicks((p) => {
       if (p.survivor === s.tokenId) return { survivor: p.donor, donor: null };
       if (p.donor === s.tokenId) return { ...p, donor: null };
@@ -166,7 +176,10 @@ export default function App() {
       return { ...p, donor: s.tokenId };
     });
   };
-  const swap = () => setPicks((p) => ({ survivor: p.donor, donor: p.survivor }));
+  const swap = () => {
+    setViewedSnap(null);
+    setPicks((p) => ({ survivor: p.donor, donor: p.survivor }));
+  };
   const name = (s: Squeek) => (lang === "zh" ? s.nameZh : s.nameEn);
   const cell = (c: Cell) => {
     if (c.k === "v_split") return t("v_split", { claim: c.v?.claim ? t("v_claimNote") : "" });
@@ -176,8 +189,8 @@ export default function App() {
   // ---- snapshots ----
   const sourceLabel = (s: SourceId) => t(s === "collection" ? "sourceCollection" : s === "api" ? "sourceApi" : "sourceRpc");
   const onSave = () => {
-    if (!survivor || !donor) return;
-    const snap = saveSnapshot({ owner, source, holdings: tokens.map((x) => ({ tokenId: x.tokenId, status: x.status, level: x.level })), survivor, donor, pace });
+    if (!survivor || !donor || !rows || viewedSnap) return;
+    const snap = saveSnapshot({ owner, source, holdings: tokens.map((x) => ({ tokenId: x.tokenId, status: x.status, level: x.level })), survivor, donor, pace, comparison: rows });
     const list = listSnapshots(owner);
     setSnaps(list);
     setChosen((c) => [snap.id, ...c.filter((x) => x !== snap.id)].slice(0, 3));
@@ -185,16 +198,14 @@ export default function App() {
   };
   const toggleChosen = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id].slice(-3)));
   const openSnap = (s: Snapshot) => {
-    if (tokens.some((x) => x.tokenId === s.survivor.tokenId) && tokens.some((x) => x.tokenId === s.donor.tokenId)) {
-      setPicks({ survivor: s.survivor.tokenId, donor: s.donor.tokenId });
-      setPace(s.pace);
-      document.getElementById("compare")?.scrollIntoView({ block: "start" });
-    }
+    setViewedSnap(s);
+    document.getElementById("compare")?.focus({ preventScroll: true });
+    document.getElementById("compare")?.scrollIntoView({ block: "start" });
   };
   const summary = () => {
     if (!survivor || !donor || !rows) return "";
     const lines = rows.map((r) => `${t(r.item)}: ${cell(r.d0)} → +7d ${cell(r.d7)} → +30d ${cell(r.d30)} [${t(`tag_${r.tag}` as Key)}]`);
-    return [`${SITE.name} · ${SITE.author}`, `${t("survivor")} #${survivor.tokenId} ${name(survivor)} · ${t("donor")} #${donor.tokenId} ${name(donor)}`, `chainId ${CHAIN_ID} · ${t("source")}: ${sourceLabel(source)}`, `${t("scenarioLabel")}: ${t(`pace_${pace}` as Key)}`, ...lines, new Date().toISOString()].join("\n");
+    return [`${SITE.name} · ${SITE.author}`, `${t("survivor")} #${survivor.tokenId} ${name(survivor)} · ${t("donor")} #${donor.tokenId} ${name(donor)}`, `${t("snapOwner")}: ${viewedSnap?.owner ?? owner}`, `chainId ${CHAIN_ID} · ${t("source")}: ${sourceLabel(viewedSnap?.source ?? source)}`, `${t("scenarioLabel")}: ${t(`pace_${viewPace}` as Key)}`, ...lines, viewedSnap?.createdAtUtc ?? new Date().toISOString()].join("\n");
   };
   const onCopy = async () => {
     try {
@@ -220,7 +231,7 @@ export default function App() {
         `${t("r_power")}: ${cell(rows![3].d0)} → ${cell(rows![3].d7)}`,
         `${t("r_cooldown")}: ${cell(rows![5].d7)}`,
         `${t("r_earn")}: ${t("tag_unknown")}`,
-        `chainId ${CHAIN_ID} · ${new Date().toISOString().slice(0, 16)}Z`,
+        `chainId ${CHAIN_ID} · ${(viewedSnap?.createdAtUtc ?? new Date().toISOString()).slice(0, 16)}Z`,
       ],
       artSvg: artRef.current?.querySelector("svg") ?? null,
       footer: t("footerNote"),
@@ -232,7 +243,7 @@ export default function App() {
   const previewRef = useRef<HTMLDialogElement>(null);
   const aboutRef = useRef<HTMLDialogElement>(null);
 
-  const officialOpen = canOpenOfficial(ticked);
+  const officialOpen = !viewedSnap && canOpenOfficial(ticked);
   const pickedCount = (picks.survivor ? 1 : 0) + (picks.donor ? 1 : 0);
   const chosenSnaps = snaps.filter((s) => chosen.includes(s.id)).slice(0, 3);
   const regretDone = REGRETS.filter((k) => ticked[k]).length;
@@ -306,7 +317,7 @@ export default function App() {
                     </div>
                     {addrError ? (
                       <p id="addr-err" className="err">
-                        {addrError}
+                        {t("addrInvalid")}
                       </p>
                     ) : (
                       <p id="addr-hint" className="hint">
@@ -327,10 +338,10 @@ export default function App() {
                   {t("pickedCount", { n: pickedCount })}
                 </span>
                 <span className="pick-actions">
-                  <button className="btn btn-quiet" onClick={swap} disabled={!survivor || !donor}>
+                  <button className="btn btn-quiet" onClick={swap} disabled={!pickedSurvivor || !pickedDonor}>
                     {t("swap")}
                   </button>
-                  <button className="btn btn-quiet" onClick={() => setPicks(noPicks)} disabled={pickedCount === 0}>
+                  <button className="btn btn-quiet" onClick={() => { setViewedSnap(null); setPicks(noPicks); }} disabled={pickedCount === 0}>
                     {t("clearPick")}
                   </button>
                 </span>
@@ -372,19 +383,22 @@ export default function App() {
               )}
               {mode === "wallet" && wallet.phase === "ready" && wallet.tokens.length === 0 && (
                 <div className="state">
-                  <p className="state-title">{t("emptyWallet", { chain: CHAIN_NAME })}</p>
+                  <p className="state-title">{wallet.source === "rpc" ? t("rpcNoVerified") : t("emptyWallet", { chain: CHAIN_NAME })}</p>
                   <p className="hint">{t("emptyWalletHint")}</p>
                   <button className="btn" onClick={() => setMode("collection")}>
                     {t("modeCollection")}
                   </button>
                 </div>
               )}
+              {mode === "wallet" && wallet.phase === "ready" && wallet.unverifiedTokenIds.length > 0 && (
+                <p className="warn" role="status">{t("rpcUnverified", { ids: wallet.unverifiedTokenIds.map((id) => `#${id}`).join(", ") })}</p>
+              )}
 
               {(mode === "collection" || wallet.phase === "ready") && tokens.length > 0 && (
                 <ul className="grid">
                   {tokens.map((s) => {
                     const role = s.tokenId === picks.survivor ? "survivor" : s.tokenId === picks.donor ? "donor" : null;
-                    const reason = role ? null : blockReason(s, survivor, rules);
+                    const reason = role ? null : blockReason(s, pickedSurvivor, rules);
                     return (
                       <li key={s.tokenId}>
                         <button className={`card${role ? ` is-${role}` : ""}`} aria-pressed={role !== null} disabled={reason !== null} onClick={() => pick(s)}>
@@ -423,6 +437,20 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {viewedSnap && (
+                    <div className="state snapshot-view">
+                      <p className="state-title">{t("snapReadonly")}</p>
+                      <dl className="kv">
+                        <dt>{t("snapTime")}</dt><dd className="tnum">{viewedSnap.createdAtUtc}</dd>
+                        <dt>{t("snapOwner")}</dt><dd className="addr">{viewedSnap.owner === COLLECTION_OWNER ? t("modeCollection") : viewedSnap.owner}</dd>
+                        <dt>{t("snapChain")}</dt><dd>{viewedSnap.chainId}</dd>
+                        <dt>{t("snapSource")}</dt><dd>{sourceLabel(viewedSnap.source)}</dd>
+                      </dl>
+                      <p className="hint addr">{t("snapTokens")}: {viewedSnap.holdings.map((h) => `#${h.tokenId} ${t(`status_${h.status}` as Key)} · ${h.level === null ? t("levelNA") : t("levelShort", { n: h.level })}`).join(" / ")}</p>
+                      {!viewedSnap.comparison && <p className="warn">{t("snapLegacy")}</p>}
+                      <button className="btn" onClick={() => setViewedSnap(null)}>{t("snapReturn")}</button>
+                    </div>
+                  )}
                   <div className="pair" ref={artRef}>
                     <div className="pair-item">
                       <HamsterArt id={survivor.tokenId} size={72} title={`${name(survivor)} #${survivor.tokenId}`} />
@@ -446,7 +474,7 @@ export default function App() {
                   </div>
                   <div className="field">
                     <label htmlFor="pace">{t("scenarioLabel")}</label>
-                    <select id="pace" value={pace} onChange={(e) => setPace(e.target.value as Pace)}>
+                    <select id="pace" value={viewPace} disabled={!!viewedSnap} onChange={(e) => setPace(e.target.value as Pace)}>
                       {(Object.keys(PACE) as Pace[]).map((p) => (
                         <option key={p} value={p}>
                           {t(`pace_${p}` as Key)}
@@ -483,7 +511,7 @@ export default function App() {
                     </table>
                   </div>
                   <div className="actions">
-                    <button className="btn btn-primary" onClick={onSave}>
+                    <button className="btn btn-primary" onClick={onSave} disabled={!!viewedSnap}>
                       {t("saveSnap")}
                     </button>
                     <button className="btn" onClick={onCopy}>
@@ -534,7 +562,7 @@ export default function App() {
                     </ul>
                     <div className="snap-grid">
                       {chosenSnaps.map((s) => {
-                        const r = buildRows(s.survivor, s.donor, s.pace, rules);
+                        const r = snapshotRows(s);
                         return (
                           <dl key={s.id} className="snap">
                             <dt>{t("snapTime")}</dt>
@@ -578,7 +606,7 @@ export default function App() {
                 {t("step3")}
               </h2>
               <p className="hint">{survivor && donor ? t("regretIntro") : t("regretNeedPair")}</p>
-              <fieldset className="regrets" disabled={!survivor || !donor}>
+              <fieldset className="regrets" disabled={!!viewedSnap || !survivor || !donor}>
                 <legend className="tnum">{t("regretProgress", { n: regretDone, t: REGRETS.length })}</legend>
                 {REGRETS.map((k) => (
                   <label key={k} className={`check${k === "g_gate" ? " check-gate" : ""}`}>
@@ -597,7 +625,7 @@ export default function App() {
                     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                       <path d="M5 7V5.5a3 3 0 0 1 6 0V7M4.5 7h7v6h-7z" />
                     </svg>
-                    {t("officialLocked")}
+                    {t(viewedSnap ? "snapReadonly" : "officialLocked")}
                   </p>
                 ) : (
                   <div className="official-body">

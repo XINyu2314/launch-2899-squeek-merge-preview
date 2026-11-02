@@ -1,0 +1,131 @@
+{
+  "results": [
+    {
+      "name": "390 first screen contains product, connect control and selectable holdings",
+      "passed": true
+    },
+    {
+      "name": "wallet chooser: row, close, backdrop, Escape, focus trap and focus return",
+      "passed": true
+    },
+    {
+      "name": "address validation errors translate immediately in both directions",
+      "passed": true
+    },
+    {
+      "name": "ZH and EN: no page overflow and all badges inside cards at 320/360/375/390/900/1440",
+      "passed": true
+    },
+    {
+      "name": "legal pair generates 11 tagged rows, Day 30 eligibility, regret gate and UI-only signing preview",
+      "passed": true
+    },
+    {
+      "name": "English share PNG: measured wrapping preserves next-round qualification, footer and attribution",
+      "passed": true,
+      "drawn": [
+        {
+          "text": "#1001 + #1003 → Lv 2",
+          "x": 420,
+          "y": 140,
+          "width": 454
+        },
+        {
+          "text": "Survivor: #1001 Sticky Rice",
+          "x": 420,
+          "y": 200,
+          "width": 353
+        },
+        {
+          "text": "Donor: #1003 Sesame Ball · #1003 burned for good",
+          "x": 420,
+          "y": 236,
+          "width": 678
+        },
+        {
+          "text": "Base power: 1,000 × 2 = 2,000 → 2,200 (from next",
+          "x": 420,
+          "y": 272,
+          "width": 648
+        },
+        {
+          "text": "round)",
+          "x": 420,
+          "y": 308,
+          "width": 88
+        },
+        {
+          "text": "Survivor cooldown: Reset: 3,000 Squeek blocks",
+          "x": 420,
+          "y": 344,
+          "width": 614
+        },
+        {
+          "text": "SQK earned: Unknown",
+          "x": 420,
+          "y": 380,
+          "width": 293
+        },
+        {
+          "text": "chainId 11155111 · 2026-11-02T23:10Z",
+          "x": 420,
+          "y": 416,
+          "width": 525
+        },
+        {
+          "text": "Squeek Merge Preview · @xinchne_eth",
+          "x": 72,
+          "y": 560,
+          "width": 544
+        },
+        {
+          "text": "Non-custodial: never signs for you, never holds keys, NFTs or tokens.",
+          "x": 72,
+          "y": 598,
+          "width": 687
+        }
+      ]
+    },
+    {
+      "name": "three baselines restore/export; old comparison keeps 2,200 after rule change; new rehearsal uses 9,000",
+      "passed": true
+    },
+    {
+      "name": "saved wallet baseline opens independently after HTTP 503 and after donor burn",
+      "passed": true
+    },
+    {
+      "name": "legacy snapshot remains viewable with missing rules labelled Unknown; source isolation preserved",
+      "passed": true
+    },
+    {
+      "name": "RPC: shared custody omitted for both accounts; direct ownership included only for verified owner",
+      "passed": true
+    },
+    {
+      "name": "wrong-chain API data rejected and successful empty response shown explicitly",
+      "passed": true
+    },
+    {
+      "name": "EIP-6963 chooser connects, closes, switches network and loads holdings without send/sign/approve",
+      "passed": true,
+      "methods": [
+        "eth_accounts",
+        "wallet_requestPermissions",
+        "eth_requestAccounts",
+        "eth_chainId",
+        "wallet_switchEthereumChain",
+        "eth_chainId"
+      ]
+    },
+    {
+      "name": "actual completed-state screenshots: 1440 and 390, #1001 + #1003, 11 rows and official checklist",
+      "passed": true
+    },
+    {
+      "name": "no page exceptions, local resource failures or RPC write methods",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

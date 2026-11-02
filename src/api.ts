@@ -113,36 +113,42 @@ async function rpc(method: string, params: unknown[]): Promise<any> {
 }
 
 /** Check token IDs the holder supplies: ownerOf on SqueekNFT, then position(0, id) on SqueekMining. */
-export async function loadByRpc(address: string, ids: string[], identities: Identities): Promise<Squeek[]> {
+export async function loadByRpc(address: string, ids: string[], identities: Identities): Promise<{ tokens: Squeek[]; unverifiedTokenIds: string[] }> {
   const chain = await rpc("eth_chainId", []);
   if (Number(chain.result) !== CHAIN_ID) throw new LoadError(`chainId ${chain.result} ≠ ${CHAIN_ID}`);
   const owner = address.trim().toLowerCase();
   const out: Squeek[] = [];
+  const unverifiedTokenIds: string[] = [];
   for (const id of ids) {
     const n = BigInt(id);
     const o = await rpc("eth_call", [{ to: identities.genesis, data: "0x6352211e" + word(n) }, "latest"]);
     if (o.error || !o.result) continue; // burned or never minted: ownerOf reverts
-    const holder = "0x" + String(o.result).slice(-40);
-    if (holder !== owner && holder !== identities.stakingProxy) continue;
+    const holder = ("0x" + String(o.result).slice(-40)).toLowerCase();
+    if (holder === identities.stakingProxy.toLowerCase()) {
+      // Shared custody is not evidence of this address's deposit. The available
+      // RPC reads do not identify a depositor, so omit it instead of attributing it.
+      unverifiedTokenIds.push(id);
+      continue;
+    }
+    if (holder !== owner) continue;
     const p = await rpc("eth_call", [{ to: identities.miningProxy, data: POSITION_SELECTOR + word(0n) + word(n) }, "latest"]);
     const hex = String(p.result ?? "").slice(2);
     const w = (i: number) => (hex.length >= (i + 1) * 64 ? BigInt("0x" + hex.slice(i * 64, (i + 1) * 64)) : null);
     const pendingRound = w(2);
     const nextMergeBlock = w(3);
     const level = w(4);
-    const staked = holder === identities.stakingProxy;
     const pending = pendingRound !== null && pendingRound > 0n;
     out.push({
       tokenId: id,
       nameZh: `Squeek #${id}`,
       nameEn: `Squeek #${id}`,
-      status: staked ? "staked" : pending ? "cooling" : "idle",
+      status: pending ? "cooling" : "idle",
       level: level === null ? null : Number(level),
       // RPC alone gives no Squeek block height to compare nextMergeBlock against, so only 0 counts as clear.
-      mergeable: !staked && !pending && nextMergeBlock === 0n,
+      mergeable: !pending && nextMergeBlock === 0n,
       note: nextMergeBlock && nextMergeBlock > 0n ? { zh: `可合并区块 ${nextMergeBlock}，当前高度未提供`, en: `Merge block ${nextMergeBlock}; current height not provided` } : undefined,
     });
   }
-  return out;
+  return { tokens: out, unverifiedTokenIds };
 }
 
