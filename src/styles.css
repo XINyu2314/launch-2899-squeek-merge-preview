@@ -357,8 +357,8 @@ main {
   cursor: not-allowed;
 }
 .card:disabled .card-art {
-  opacity: 0.5;
-  filter: grayscale(0.7);
+  opacity: 0.78;
+  filter: grayscale(0.22);
 }
 .card:disabled .card-name {
   color: var(--color-text-muted);
