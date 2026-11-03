@@ -2,7 +2,7 @@
 
 持有人合并 Squeek 之前的**非托管决策台**：选两只 Squeek → Day 0 / +7 天 / +30 天前后对照与后悔点 → 本地 Baseline 快照 → 勾选「我理解合并可能不可逆」后才给出官方合并检查单。站点本身**不发起任何合并交易**。
 
-叙事：Direct · Utilities for holders — non-custodial tools for staking, merging, and managing Squeeks。页脚署名 @xinchne_eth，部署优先 https://xinchne.xyz（本仓库只交付静态导出 `dist/`，托管不在本次范围内）。
+叙事：Direct · Utilities for holders — non-custodial tools for staking, merging, and managing Squeeks
 
 ## 非托管边界
 
